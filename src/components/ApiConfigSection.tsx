@@ -21,11 +21,11 @@ import { Alert, AlertDescription } from "../../src/components/ui/alert";
 
 interface ApiConfigSectionProps {
   onSave?: (config: {
-    jira: { apiKey: string; domain: string; enabled: boolean };
+    jira: { apiKey: string; domain: string; email: string; enabled: boolean };
     openai: { apiKey: string; enabled: boolean };
   }) => void;
   initialConfig?: {
-    jira: { apiKey: string; domain: string; enabled: boolean };
+    jira: { apiKey: string; domain: string; email: string; enabled: boolean };
     openai: { apiKey: string; enabled: boolean };
   };
 }
@@ -33,7 +33,7 @@ interface ApiConfigSectionProps {
 const ApiConfigSection = ({
   onSave,
   initialConfig = {
-    jira: { apiKey: "", domain: "", enabled: false },
+    jira: { apiKey: "", domain: "", email: "", enabled: false },
     openai: { apiKey: "", enabled: false },
   },
 }: ApiConfigSectionProps) => {
@@ -133,6 +133,18 @@ const ApiConfigSection = ({
                   placeholder="https://your-domain.atlassian.net"
                   value={config.jira.domain}
                   onChange={(e) => handleJiraChange("domain", e.target.value)}
+                  disabled={!config.jira.enabled}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="jira-email">Email</Label>
+                <Input
+                  id="jira-email"
+                  type="email"
+                  placeholder="your-email@example.com"
+                  value={config.jira.email}
+                  onChange={(e) => handleJiraChange("email", e.target.value)}
                   disabled={!config.jira.enabled}
                 />
               </div>

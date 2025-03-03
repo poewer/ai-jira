@@ -41,7 +41,7 @@ interface SettingsData {
     compactMode: boolean;
   };
   apis: {
-    jira: { apiKey: string; domain: string; enabled: boolean };
+    jira: { apiKey: string; domain: string; email: string; enabled: boolean };
     openai: { apiKey: string; enabled: boolean };
   };
 }
@@ -61,7 +61,7 @@ const SettingsPanel = ({
       compactMode: false,
     },
     apis: {
-      jira: { apiKey: "", domain: "", enabled: false },
+      jira: { apiKey: "", domain: "", email: "", enabled: false },
       openai: { apiKey: "", enabled: false },
     },
   },
@@ -90,7 +90,7 @@ const SettingsPanel = ({
   };
 
   const handleApiConfigSave = (apiConfig: {
-    jira: { apiKey: string; domain: string; enabled: boolean };
+    jira: { apiKey: string; domain: string; email: string; enabled: boolean };
     openai: { apiKey: string; enabled: boolean };
   }) => {
     setSettings({
