@@ -21,8 +21,8 @@ import ReminderPopup from "./ReminderPopup";
 import SettingsPanel from "./SettingsPanel";
 import StatusBar from "./StatusBar";
 import JiraTaskSelector from "./JiraTaskSelector";
-import WorkLogStats from "./WorkLogStats"; // Dodajemy nowy komponent
-import { useJiraConnection } from "@/hooks/useJira"; // Importujemy hook do sprawdzania połączenia
+import EnhancedTimeTracking from "./EnhancedTimeTracking";
+import { useJiraConnection, useWorklogs, useJiraTasks } from "@/hooks/useJira";
 
 interface WorkLog {
   id: string;
@@ -60,9 +60,39 @@ const Home = () => {
     // Pozostałe zamockowane logs...
   ]);
 
-  // Użyj hooka do sprawdzenia statusu połączenia z Jirą
+  // Get current date for jira worklogs
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+
+  // Jira connection status
   const { isConnected: jiraConnected, loading: jiraLoading } = useJiraConnection();
   const [openaiConnected, setOpenaiConnected] = useState(false);
+
+  // Get actual Jira worklog data
+  const { 
+    worklogs: jiraWorklogs, 
+    totalTimeMinutes,
+    worklogsByTask 
+  } = useWorklogs(currentMonth, currentYear);
+
+  // Calculate statistics from Jira data
+  const jiraLogCount = jiraWorklogs.length;
+  const totalHours = totalTimeMinutes / 60;
+  const percentageComplete = (totalHours / 168) * 100; // 168 is the monthly target
+
+  // Update last log time from jira logs when available
+  useEffect(() => {
+    if (jiraWorklogs.length > 0) {
+      // Sort logs by date (newest first)
+      const sortedLogs = [...jiraWorklogs].sort((a, b) => 
+        new Date(b.updated).getTime() - new Date(a.updated).getTime()
+      );
+      
+      // Update the last log time
+      setLastLogTime(new Date(sortedLogs[0].updated));
+    }
+  }, [jiraWorklogs]);
 
   // Set up reminder timer
   useEffect(() => {
@@ -117,13 +147,30 @@ const Home = () => {
 
   const handleSaveSettings = (settings: any) => {
     // Update settings
-    // setJiraConnected(settings.apis.jira.enabled);
     setOpenaiConnected(settings.apis.openai.enabled);
 
     // Update reminder frequency
     const reminderFrequencyMs = settings.general.reminderFrequency * 60 * 1000;
     setNextReminderTime(new Date(Date.now() + reminderFrequencyMs));
   };
+
+  // Create displayable logs - combine mock UI and actual Jira logs
+  const displayLogs = jiraWorklogs.length > 0 
+    ? jiraWorklogs.map(log => ({
+        id: log.id,
+        timestamp: new Date(log.updated),
+        description: log.comment,
+        jiraTask: {
+          key: log.issueKey,
+          summary: log.issueKey,
+        },
+        hasScreenshot: false,
+        aiEnhanced: false,
+      }))
+    : workLogs;
+
+  // Count AI-enhanced logs
+  const aiEnhancedCount = displayLogs.filter(log => log.aiEnhanced).length;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -141,8 +188,7 @@ const Home = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main dashboard area */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Dodajemy nowy komponent WorkLogStats */}
-            <WorkLogStats />
+            <EnhancedTimeTracking />
             
             <Card>
               <CardHeader>
@@ -179,7 +225,7 @@ const Home = () => {
                     <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                       <FileText className="h-8 w-8 text-green-500 mb-2" />
                       <p className="text-sm text-gray-500">Total Logs</p>
-                      <p className="text-xl font-semibold">{workLogs.length}</p>
+                      <p className="text-xl font-semibold">{jiraLogCount > 0 ? jiraLogCount : workLogs.length}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -187,7 +233,7 @@ const Home = () => {
                       <Zap className="h-8 w-8 text-purple-500 mb-2" />
                       <p className="text-sm text-gray-500">AI Enhanced</p>
                       <p className="text-xl font-semibold">
-                        {workLogs.filter((log) => log.aiEnhanced).length}
+                        {aiEnhancedCount}
                       </p>
                     </CardContent>
                   </Card>
@@ -199,8 +245,8 @@ const Home = () => {
                     <TabsTrigger value="jira">Jira Tasks</TabsTrigger>
                   </TabsList>
                   <TabsContent value="recent" className="space-y-4">
-                    {workLogs.length > 0 ? (
-                      workLogs.map((log) => (
+                    {displayLogs.length > 0 ? (
+                      displayLogs.map((log) => (
                         <Card key={log.id}>
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start mb-2">
