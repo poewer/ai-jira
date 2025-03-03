@@ -2,14 +2,11 @@
   "name": "starter",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "main": "electron/electron.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc ; vite build",
-    "build-no-errors": "tsc ; vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
-    "types:supabase": "npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types/supabase.ts"
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:3000 && electron .\"",
+    "build": "tsc && vite build",
+    "start": "electron ."
   },
   "dependencies": {
     "@hookform/resolvers": "^3.6.0",
@@ -44,7 +41,10 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "date-fns": "^3.6.0",
+    "electron": "^34.3.0",
     "embla-carousel-react": "^8.1.5",
     "framer-motion": "^11.18.0",
     "lucide-react": "^0.394.0",
@@ -58,6 +58,7 @@
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.1",
+    "wait-on": "^8.0.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
