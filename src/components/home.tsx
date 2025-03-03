@@ -21,6 +21,8 @@ import ReminderPopup from "./ReminderPopup";
 import SettingsPanel from "./SettingsPanel";
 import StatusBar from "./StatusBar";
 import JiraTaskSelector from "./JiraTaskSelector";
+import WorkLogStats from "./WorkLogStats"; // Dodajemy nowy komponent
+import { useJiraConnection } from "@/hooks/useJira"; // Importujemy hook do sprawdzania połączenia
 
 interface WorkLog {
   id: string;
@@ -42,8 +44,6 @@ const Home = () => {
     new Date(Date.now() + 30 * 60 * 1000),
   );
   const [lastLogTime, setLastLogTime] = useState<Date | null>(null);
-  const [jiraConnected, setJiraConnected] = useState(false);
-  const [openaiConnected, setOpenaiConnected] = useState(false);
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([
     {
       id: "1",
@@ -57,27 +57,12 @@ const Home = () => {
       hasScreenshot: true,
       aiEnhanced: true,
     },
-    {
-      id: "2",
-      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
-      description:
-        "Researched API integration options for Jira and OpenAI. Documented the requirements and implementation approach.",
-      hasScreenshot: false,
-      aiEnhanced: true,
-    },
-    {
-      id: "3",
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      description:
-        "Team meeting to discuss project requirements and timeline. Created initial project structure and setup development environment.",
-      jiraTask: {
-        key: "PROJ-120",
-        summary: "Project setup and planning",
-      },
-      hasScreenshot: false,
-      aiEnhanced: false,
-    },
+    // Pozostałe zamockowane logs...
   ]);
+
+  // Użyj hooka do sprawdzenia statusu połączenia z Jirą
+  const { isConnected: jiraConnected, loading: jiraLoading } = useJiraConnection();
+  const [openaiConnected, setOpenaiConnected] = useState(false);
 
   // Set up reminder timer
   useEffect(() => {
@@ -132,7 +117,7 @@ const Home = () => {
 
   const handleSaveSettings = (settings: any) => {
     // Update settings
-    setJiraConnected(settings.apis.jira.enabled);
+    // setJiraConnected(settings.apis.jira.enabled);
     setOpenaiConnected(settings.apis.openai.enabled);
 
     // Update reminder frequency
@@ -156,6 +141,9 @@ const Home = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main dashboard area */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Dodajemy nowy komponent WorkLogStats */}
+            <WorkLogStats />
+            
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Search, Clock, Star, ExternalLink } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -11,83 +11,45 @@ import {
 } from "./ui/tooltip";
 import { ScrollArea } from "./ui/scroll-area";
 import { Badge } from "./ui/badge";
-
-interface JiraTask {
-  id: string;
-  key: string;
-  summary: string;
-  status: string;
-  isStarred?: boolean;
-  lastUpdated?: string;
-}
+import { Skeleton } from "./ui/skeleton";
+import { useJiraTasks } from "@/hooks/useJira";
+import { JiraTask } from "@/services/jiraService";
 
 interface JiraTaskSelectorProps {
   onTaskSelect?: (task: JiraTask) => void;
-  recentTasks?: JiraTask[];
   isConnected?: boolean;
 }
 
 const JiraTaskSelector = ({
   onTaskSelect = () => {},
-  recentTasks = [
-    {
-      id: "1",
-      key: "PROJ-123",
-      summary: "Implement login functionality",
-      status: "In Progress",
-      isStarred: true,
-      lastUpdated: "2023-06-15",
-    },
-    {
-      id: "2",
-      key: "PROJ-124",
-      summary: "Fix navigation bug in mobile view",
-      status: "To Do",
-      isStarred: false,
-      lastUpdated: "2023-06-14",
-    },
-    {
-      id: "3",
-      key: "PROJ-125",
-      summary: "Update user documentation",
-      status: "Done",
-      isStarred: false,
-      lastUpdated: "2023-06-13",
-    },
-  ],
   isConnected = true,
 }: JiraTaskSelectorProps) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<JiraTask[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [selectedTask, setSelectedTask] = useState<JiraTask | null>(null);
+  
+  const { tasks, loading, error } = useJiraTasks();
 
-  // Simulate search functionality
-  useEffect(() => {
-    if (searchQuery.length > 2) {
-      setIsSearching(true);
-      // Simulate API call delay
-      const timer = setTimeout(() => {
-        const filteredResults = recentTasks.filter(
-          (task) =>
-            task.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            task.summary.toLowerCase().includes(searchQuery.toLowerCase()),
-        );
-        setSearchResults(filteredResults);
-        setIsSearching(false);
-      }, 500);
+  // Filter tasks based on search query
+  const searchResults = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 3) return [];
+    
+    return tasks.filter(
+      (task) =>
+        task.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.summary.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery, tasks]);
 
-      return () => clearTimeout(timer);
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery, recentTasks]);
+  // Get recent tasks - just take the first few
+  const recentTasks = useMemo(() => {
+    return tasks.slice(0, 5);
+  }, [tasks]);
 
   const handleTaskSelect = (task: JiraTask) => {
     setSelectedTask(task);
     onTaskSelect(task);
     setSearchQuery(""); // Clear search after selection
-    setSearchResults([]);
+    
   };
 
   const getStatusColor = (status: string) => {
@@ -117,6 +79,46 @@ const JiraTaskSelector = ({
             </p>
             <Button variant="outline" size="sm">
               Open Settings
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Add loading state
+  if (loading && !tasks.length) {
+    return (
+      <Card className="w-full bg-white">
+        <CardContent className="p-4">
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Card className="w-full bg-white">
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center justify-center py-4 text-center">
+            <div className="text-red-400 mb-2">
+              <ExternalLink className="h-10 w-10" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Error Loading Tasks</h3>
+            <p className="text-sm text-red-500 mb-3">
+              {error.message}
+            </p>
+            <Button variant="outline" size="sm">
+              Retry
             </Button>
           </div>
         </CardContent>
@@ -176,15 +178,9 @@ const JiraTaskSelector = ({
             </div>
           )}
 
-          {isSearching && (
-            <div className="py-3 text-center text-sm text-gray-500">
-              Searching...
-            </div>
-          )}
-
           {searchQuery.length > 2 &&
             searchResults.length === 0 &&
-            !isSearching && (
+            !loading && (
               <div className="py-3 text-center text-sm text-gray-500">
                 No tasks found matching "{searchQuery}"
               </div>

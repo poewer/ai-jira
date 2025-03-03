@@ -5,19 +5,20 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../../src/components/ui/card";
+} from "./ui/card";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "../../src/components/ui/tabs";
-import { Input } from "../../src/components/ui/input";
-import { Label } from "../../src/components/ui/label";
-import { Button } from "../../src/components/ui/button";
-import { Switch } from "../../src/components/ui/switch";
+} from "./ui/tabs";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
 import { AlertCircle, CheckCircle2, Key } from "lucide-react";
-import { Alert, AlertDescription } from "../../src/components/ui/alert";
+import { Alert, AlertDescription } from "./ui/alert";
+import { jiraService } from "@/services/jiraService";
 
 interface ApiConfigSectionProps {
   onSave?: (config: {
@@ -66,16 +67,28 @@ const ApiConfigSection = ({
     });
   };
 
-  const testJiraConnection = () => {
+  const testJiraConnection = async () => {
     setTestStatus({ ...testStatus, jira: "testing" });
-    // Simulate API test
-    setTimeout(() => {
-      if (config.jira.apiKey && config.jira.domain) {
+    
+    try {
+      // Set the actual credentials to the service
+      jiraService.setCredentials({
+        email: config.jira.email,
+        apiToken: config.jira.apiKey,
+        domain: config.jira.domain
+      });
+      
+      // Test the connection
+      const isConnected = await jiraService.testConnection();
+      
+      if (isConnected) {
         setTestStatus({ ...testStatus, jira: "success" });
       } else {
         setTestStatus({ ...testStatus, jira: "error" });
       }
-    }, 1000);
+    } catch (error) {
+      setTestStatus({ ...testStatus, jira: "error" });
+    }
   };
 
   const testOpenAIConnection = () => {
