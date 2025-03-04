@@ -6,8 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useWorklogs } from '../hooks/useJira';
 import { jiraService } from '../services/jiraService';
 import { Skeleton } from './ui/skeleton';
-import { Calendar, ArrowUp, ArrowDown, FileText } from 'lucide-react';
+import { Calendar, ArrowUp, ArrowDown, FileText, RefreshCw } from 'lucide-react';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 
 const months = [
   { value: '1', label: 'January' },
@@ -41,7 +42,8 @@ const EnhancedTimeTracking = () => {
     loading,
     error,
     totalTimeMinutes,
-    worklogsByTask
+    worklogsByTask,
+    refetch
   } = useWorklogs(month, year);
 
   // Monthly target in hours
@@ -60,7 +62,7 @@ const EnhancedTimeTracking = () => {
   // Daily average needed to reach target
   const dailyHoursNeeded = workdaysLeft > 0 ? remainingHours / workdaysLeft : 0;
 
-  function calculateBusinessDaysLeft(year, month, startDay, totalDays) {
+  function calculateBusinessDaysLeft(year: number, month: number, startDay: number, totalDays: number) {
     let businessDays = 0;
 
     for (let day = startDay; day <= totalDays; day++) {
@@ -84,8 +86,13 @@ const EnhancedTimeTracking = () => {
     .sort((a, b) => b.totalMinutes - a.totalMinutes);
 
   // Format time as 1w 2d 4h format
-  const formatTimeDisplay = (minutes) => {
+  const formatTimeDisplay = (minutes: number) => {
     return jiraService.formatMinutes(minutes);
+  };
+
+  // Function to handle refresh button click
+  const handleRefresh = () => {
+    refetch(true);
   };
 
   return (
@@ -123,6 +130,15 @@ const EnhancedTimeTracking = () => {
               ))}
             </SelectContent>
           </Select>
+          
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
       </CardHeader>
 
@@ -136,6 +152,14 @@ const EnhancedTimeTracking = () => {
         ) : error ? (
           <div className="text-center py-8 text-red-500">
             <p>Error loading work logs: {error.message}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              className="mt-2"
+            >
+              Retry
+            </Button>
           </div>
         ) : (
           <>

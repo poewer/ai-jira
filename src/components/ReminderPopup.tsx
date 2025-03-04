@@ -12,6 +12,7 @@ import { Textarea } from "./ui/textarea";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import ScreenshotPreview from "./ScreenshotPreview";
+import { JiraTask } from "@/services/jiraService";
 
 interface ReminderPopupProps {
   isOpen?: boolean;
@@ -21,10 +22,12 @@ interface ReminderPopupProps {
     includeScreenshot: boolean;
     useAiEnhancement: boolean;
     screenshot?: string;
+    jiraTask?: JiraTask;  // Add this property
   }) => void;
   defaultWorkDescription?: string;
   defaultIncludeScreenshot?: boolean;
   defaultUseAiEnhancement?: boolean;
+  selectedTask?: JiraTask;  // Add this property
 }
 
 const ReminderPopup = ({
@@ -34,6 +37,7 @@ const ReminderPopup = ({
   defaultWorkDescription = "",
   defaultIncludeScreenshot = false,
   defaultUseAiEnhancement = true,
+  selectedTask = null
 }: ReminderPopupProps) => {
   const [workDescription, setWorkDescription] = useState(
     defaultWorkDescription,

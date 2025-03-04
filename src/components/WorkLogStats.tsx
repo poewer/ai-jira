@@ -6,6 +6,8 @@ import { useWorklogs } from '@/hooks/useJira';
 import { jiraService } from '@/services/jiraService';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Skeleton } from './ui/skeleton';
+import { Button } from './ui/button';
+import { RefreshCw } from 'lucide-react';
 
 const months = [
   { value: '1', label: 'January' },
@@ -32,7 +34,7 @@ const WorkLogStats = () => {
   const [month, setMonth] = useState<number>(currentDate.getMonth() + 1);
   const [year, setYear] = useState<number>(currentDate.getFullYear());
   
-  const { worklogs, loading, error, totalTimeMinutes, worklogsByTask } = useWorklogs(month, year);
+  const { worklogs, loading, error, totalTimeMinutes, worklogsByTask, refetch } = useWorklogs(month, year);
   
   // Calculate total hours
   const totalHours = totalTimeMinutes / 60;
@@ -74,6 +76,15 @@ const WorkLogStats = () => {
                 ))}
               </SelectContent>
             </Select>
+            
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => refetch(true)}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
       </CardHeader>

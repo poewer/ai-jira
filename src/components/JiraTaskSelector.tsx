@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Clock, Star, ExternalLink } from "lucide-react";
+import { Search, Clock, Star, ExternalLink, RefreshCw } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -27,7 +27,7 @@ const JiraTaskSelector = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTask, setSelectedTask] = useState<JiraTask | null>(null);
   
-  const { tasks, loading, error } = useJiraTasks();
+  const { tasks, loading, error, refetch } = useJiraTasks();
 
   // Filter tasks based on search query
   const searchResults = useMemo(() => {
@@ -49,7 +49,6 @@ const JiraTaskSelector = ({
     setSelectedTask(task);
     onTaskSelect(task);
     setSearchQuery(""); // Clear search after selection
-    
   };
 
   const getStatusColor = (status: string) => {
@@ -117,7 +116,11 @@ const JiraTaskSelector = ({
             <p className="text-sm text-red-500 mb-3">
               {error.message}
             </p>
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => refetch(true)}
+            >
               Retry
             </Button>
           </div>
@@ -129,6 +132,19 @@ const JiraTaskSelector = ({
   return (
     <Card className="w-full bg-white">
       <CardContent className="p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium">Jira Tasks</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch(true)}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+        
         <div className="space-y-4">
           <div className="relative">
             <Input

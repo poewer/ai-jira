@@ -6,6 +6,7 @@ import {
   PenSquare,
   LayoutDashboard,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import {
   Card,
@@ -23,6 +24,8 @@ import StatusBar from "./StatusBar";
 import JiraTaskSelector from "./JiraTaskSelector";
 import EnhancedTimeTracking from "./EnhancedTimeTracking";
 import { useJiraConnection, useWorklogs, useJiraTasks } from "@/hooks/useJira";
+import { CacheService } from "@/services/cacheService";
+import { jiraService, JiraTask } from "@/services/jiraService";
 
 interface WorkLog {
   id: string;
@@ -57,8 +60,8 @@ const Home = () => {
       hasScreenshot: true,
       aiEnhanced: true,
     },
-    // Pozostałe zamockowane logs...
   ]);
+  const [selectedTask, setSelectedTask] = useState<JiraTask | null>(null);
 
   // Get current date for jira worklogs
   const currentDate = new Date();
@@ -66,20 +69,108 @@ const Home = () => {
   const currentYear = currentDate.getFullYear();
 
   // Jira connection status
-  const { isConnected: jiraConnected, loading: jiraLoading } = useJiraConnection();
+  const { isConnected: jiraConnected, loading: jiraLoading, testConnection } = useJiraConnection();
   const [openaiConnected, setOpenaiConnected] = useState(false);
 
   // Get actual Jira worklog data
   const { 
     worklogs: jiraWorklogs, 
     totalTimeMinutes,
-    worklogsByTask 
+    worklogsByTask,
+    refetch: refetchWorklogs
   } = useWorklogs(currentMonth, currentYear);
+
+  // Get Jira tasks
+  const { tasks: jiraTasks, refetch: refetchTasks } = useJiraTasks();
 
   // Calculate statistics from Jira data
   const jiraLogCount = jiraWorklogs.length;
   const totalHours = totalTimeMinutes / 60;
   const percentageComplete = (totalHours / 168) * 100; // 168 is the monthly target
+
+  // Load workLogs from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedLogs = localStorage.getItem('work_logs');
+      if (savedLogs) {
+        const parsedLogs = JSON.parse(savedLogs);
+        // Convert string timestamps back to Date objects
+        const formattedLogs = parsedLogs.map((log: any) => ({
+          ...log,
+          timestamp: new Date(log.timestamp)
+        }));
+        setWorkLogs(formattedLogs);
+      }
+    } catch (error) {
+      console.error('Error loading work logs from localStorage:', error);
+    }
+    
+    // Also load OpenAI connection status
+    const savedOpenAIStatus = localStorage.getItem('openai_connected');
+    if (savedOpenAIStatus) {
+      setOpenaiConnected(savedOpenAIStatus === 'true');
+    }
+  }, []);
+
+  // Load reminder settings from localStorage on startup
+  useEffect(() => {
+    // Load reminder state
+    const savedReminderEnabled = localStorage.getItem('reminder_enabled');
+    if (savedReminderEnabled !== null) {
+      setIsReminderEnabled(savedReminderEnabled === 'true');
+    }
+    
+    // Load next reminder time
+    const savedNextReminderTime = localStorage.getItem('next_reminder_time');
+    if (savedNextReminderTime) {
+      const parsedTime = new Date(savedNextReminderTime);
+      // Only use saved time if it's in the future
+      if (parsedTime.getTime() > Date.now()) {
+        setNextReminderTime(parsedTime);
+      } else {
+        // If the saved time is in the past, set a new time 30 minutes from now
+        setNextReminderTime(new Date(Date.now() + 30 * 60 * 1000));
+      }
+    }
+  }, []);
+  
+  // Check for stale cache and refresh data if needed
+  useEffect(() => {
+    const checkAndRefreshCache = async () => {
+      // Get user email from localStorage
+      let userEmail = 'user';
+      try {
+        const credentials = localStorage.getItem('jira_credentials');
+        if (credentials) {
+          userEmail = JSON.parse(credentials).email;
+        }
+      } catch (error) {
+        console.error('Error parsing credentials from localStorage:', error);
+      }
+      
+      // Check if tasks cache is stale (older than 30 minutes)
+      const tasksLastUpdated = CacheService.getLastUpdated(`jira_tasks_${userEmail}`);
+      if (!tasksLastUpdated || (Date.now() - tasksLastUpdated > 30 * 60 * 1000)) {
+        console.log('Tasks cache is stale, refreshing...');
+        refetchTasks(true);
+      }
+
+      // Check if worklogs cache is stale (older than 15 minutes)
+      const worklogsLastUpdated = CacheService.getLastUpdated(`jira_all_worklogs_${userEmail}_${currentMonth}_${currentYear}`);
+      if (!worklogsLastUpdated || (Date.now() - worklogsLastUpdated > 15 * 60 * 1000)) {
+        console.log('Worklogs cache is stale, refreshing...');
+        refetchWorklogs(true);
+      }
+    };
+    
+    // Run check on component mount
+    checkAndRefreshCache();
+    
+    // Also set up interval to periodically check for stale cache (every 5 minutes)
+    const intervalId = setInterval(checkAndRefreshCache, 5 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [currentMonth, currentYear, refetchTasks, refetchWorklogs]);
 
   // Update last log time from jira logs when available
   useEffect(() => {
@@ -91,9 +182,18 @@ const Home = () => {
       
       // Update the last log time
       setLastLogTime(new Date(sortedLogs[0].updated));
+      
+      // Also save to localStorage for persistence between sessions
+      localStorage.setItem('last_log_time', sortedLogs[0].updated);
+    } else {
+      // Try to get from localStorage if no logs available
+      const savedLastLogTime = localStorage.getItem('last_log_time');
+      if (savedLastLogTime) {
+        setLastLogTime(new Date(savedLastLogTime));
+      }
     }
   }, [jiraWorklogs]);
-
+  
   // Set up reminder timer
   useEffect(() => {
     if (!isReminderEnabled) return;
@@ -103,7 +203,10 @@ const Home = () => {
       // Show reminder immediately if it's due
       setIsReminderOpen(true);
       // Set next reminder for 30 minutes from now
-      setNextReminderTime(new Date(Date.now() + 30 * 60 * 1000));
+      const newReminderTime = new Date(Date.now() + 30 * 60 * 1000);
+      setNextReminderTime(newReminderTime);
+      // Save to localStorage
+      localStorage.setItem('next_reminder_time', newReminderTime.toISOString());
       return;
     }
 
@@ -111,47 +214,140 @@ const Home = () => {
     const timerId = setTimeout(() => {
       setIsReminderOpen(true);
       // Set next reminder for 30 minutes after this one
-      setNextReminderTime(new Date(Date.now() + 30 * 60 * 1000));
+      const newReminderTime = new Date(Date.now() + 30 * 60 * 1000);
+      setNextReminderTime(newReminderTime);
+      // Save to localStorage
+      localStorage.setItem('next_reminder_time', newReminderTime.toISOString());
     }, timeUntilReminder);
 
     return () => clearTimeout(timerId);
   }, [isReminderEnabled, nextReminderTime]);
 
   const handleToggleReminder = () => {
-    setIsReminderEnabled(!isReminderEnabled);
-    if (!isReminderEnabled) {
+    const newState = !isReminderEnabled;
+    setIsReminderEnabled(newState);
+    // Save to localStorage
+    localStorage.setItem('reminder_enabled', newState.toString());
+    
+    if (newState) {
       // If enabling reminders, set next reminder time
-      setNextReminderTime(new Date(Date.now() + 30 * 60 * 1000));
+      const newReminderTime = new Date(Date.now() + 30 * 60 * 1000);
+      setNextReminderTime(newReminderTime);
+      // Save to localStorage
+      localStorage.setItem('next_reminder_time', newReminderTime.toISOString());
     }
   };
 
-  const handleReminderSubmit = (data: {
+  const handleReminderSubmit = async (data: {
     workDescription: string;
     includeScreenshot: boolean;
     useAiEnhancement: boolean;
     screenshot?: string;
+    jiraTask?: JiraTask;
   }) => {
     // Create a new work log entry
+    const currentTime = new Date();
     const newLog: WorkLog = {
-      id: Date.now().toString(),
-      timestamp: new Date(),
+      id: currentTime.getTime().toString(),
+      timestamp: currentTime,
       description: data.workDescription,
       hasScreenshot: data.includeScreenshot,
       aiEnhanced: data.useAiEnhancement,
+      jiraTask: data.jiraTask ? {
+        key: data.jiraTask.key,
+        summary: data.jiraTask.summary
+      } : undefined
     };
 
-    setWorkLogs([newLog, ...workLogs]);
-    setLastLogTime(new Date());
+    // Add to state
+    const updatedLogs = [newLog, ...workLogs];
+    setWorkLogs(updatedLogs);
+    
+    // Update last log time
+    setLastLogTime(currentTime);
+    localStorage.setItem('last_log_time', currentTime.toISOString());
+    
+    // Save to localStorage
+    try {
+      // Save only the 20 most recent logs to avoid bloating localStorage
+      const logsToSave = updatedLogs.slice(0, 20);
+      localStorage.setItem('work_logs', JSON.stringify(logsToSave));
+    } catch (error) {
+      console.error('Error saving work logs to localStorage:', error);
+    }
+    
+    // If Jira task is selected, log time to Jira
+    if (data.jiraTask && jiraConnected) {
+      try {
+        // Default to 1h if no time specified in the description
+        let timeSpent = "1h";
+        
+        // Try to extract time pattern like 2h 30m from the description
+        const timePattern = /(\d+[wdhm]\s*)+/i;
+        const timeMatch = data.workDescription.match(timePattern);
+        if (timeMatch && timeMatch[0]) {
+          timeSpent = timeMatch[0].trim();
+        }
+        
+        await jiraService.addWorklog(
+          data.jiraTask.key,
+          timeSpent,
+          data.workDescription
+        );
+        
+        // Force refresh worklogs after successful submission
+        setTimeout(() => {
+          refetchWorklogs(true);
+        }, 1500);
+      } catch (error) {
+        console.error('Error logging work to Jira:', error);
+      }
+    }
+    
     setIsReminderOpen(false);
   };
 
   const handleSaveSettings = (settings: any) => {
     // Update settings
     setOpenaiConnected(settings.apis.openai.enabled);
+    
+    // Save openAI connection status to localStorage
+    localStorage.setItem('openai_connected', settings.apis.openai.enabled.toString());
 
     // Update reminder frequency
     const reminderFrequencyMs = settings.general.reminderFrequency * 60 * 1000;
-    setNextReminderTime(new Date(Date.now() + reminderFrequencyMs));
+    const newReminderTime = new Date(Date.now() + reminderFrequencyMs);
+    setNextReminderTime(newReminderTime);
+    
+    // Save to localStorage
+    localStorage.setItem('next_reminder_time', newReminderTime.toISOString());
+    localStorage.setItem('reminder_frequency', settings.general.reminderFrequency.toString());
+    
+    // If Jira credentials changed, retest the connection and refresh data
+    if (settings.apis.jira.enabled) {
+      // Wait a short time for the credential change to apply
+      setTimeout(() => {
+        testConnection();
+        refetchTasks(true);
+        refetchWorklogs(true);
+      }, 1000);
+    }
+  };
+
+  // Function to manually refresh all data
+  const refreshAllData = () => {
+    console.log('Refreshing all data...');
+    // Refresh Jira connection
+    testConnection();
+    // Refresh tasks
+    refetchTasks(true);
+    // Refresh worklogs
+    refetchWorklogs(true);
+  };
+  
+  // Function to handle task selection
+  const handleTaskSelect = (task: JiraTask) => {
+    setSelectedTask(task);
   };
 
   // Create displayable logs - combine mock UI and actual Jira logs
@@ -287,7 +483,10 @@ const Home = () => {
                     )}
                   </TabsContent>
                   <TabsContent value="jira">
-                    <JiraTaskSelector isConnected={jiraConnected} />
+                    <JiraTaskSelector 
+                      isConnected={jiraConnected} 
+                      onTaskSelect={handleTaskSelect}
+                    />
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -348,16 +547,54 @@ const Home = () => {
                     {openaiConnected ? "Connected" : "Not Connected"}
                   </span>
                 </div>
-                {(!jiraConnected || !openaiConnected) && (
+                <div className="flex flex-col space-y-2">
+                  {(!jiraConnected || !openaiConnected) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsSettingsOpen(true)}
+                    >
+                      Configure Integrations
+                    </Button>
+                  )}
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    className="w-full mt-2"
-                    onClick={() => setIsSettingsOpen(true)}
+                    onClick={refreshAllData}
+                    disabled={jiraLoading}
                   >
-                    Configure Integrations
+                    <RefreshCw className={`h-4 w-4 mr-2 ${jiraLoading ? 'animate-spin' : ''}`} />
+                    Refresh All Data
                   </Button>
-                )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // Clear all app-related cache but leave credentials
+                      const credentials = localStorage.getItem('jira_credentials');
+                      const openaiStatus = localStorage.getItem('openai_connected');
+                      
+                      Object.keys(localStorage).forEach(key => {
+                        if (key.startsWith('jira_')) {
+                          localStorage.removeItem(key);
+                        }
+                      });
+                      
+                      // Restore credentials
+                      if (credentials) {
+                        localStorage.setItem('jira_credentials', credentials);
+                      }
+                      if (openaiStatus) {
+                        localStorage.setItem('openai_connected', openaiStatus);
+                      }
+                      
+                      // Then refresh all data
+                      refreshAllData();
+                    }}
+                  >
+                    Clear Cache
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -380,6 +617,7 @@ const Home = () => {
         isOpen={isReminderOpen}
         onClose={() => setIsReminderOpen(false)}
         onSubmit={handleReminderSubmit}
+        selectedTask={selectedTask}
       />
 
       <SettingsPanel
